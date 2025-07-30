@@ -38,8 +38,11 @@ def extract_deck_id(url):
 
 def load_moxfield_deck(deck_id):
     api_url = f"https://api.moxfield.com/v2/decks/all/{deck_id}"
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
     try:
-        response = requests.get(api_url)
+        response = requests.get(api_url, headers=headers)
         response.raise_for_status()
         data = response.json()
         return list(data["mainboard"].keys())
