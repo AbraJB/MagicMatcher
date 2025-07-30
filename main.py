@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import requests
+from bs4 import BeautifulSoup
 
-st.set_page_config(page_title="Magic Deck Matcher (Moxfield)", layout="wide")
+st.set_page_config(page_title="Magic Deck Matcher (Moxfield Scraper)", layout="wide")
 st.title("🧙 Magic Deck Matcher")
 st.markdown("Compare your card collection with decks from [Moxfield](https://www.moxfield.com).")
 
@@ -37,17 +38,22 @@ def extract_deck_id(url):
     return None
 
 def load_moxfield_deck(deck_id):
-    api_url = f"https://api.moxfield.com/v2/decks/all/{deck_id}"
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    url = f"https://www.moxfield.com/decks/{deck_id}"
+    headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        response = requests.get(api_url, headers=headers)
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
-        data = response.json()
-        return list(data["mainboard"].keys())
+        soup = BeautifulSoup(response.text, "html.parser")
+        
+        mainboard_section = soup.select_one(".deck-mainboard")
+        if not mainboard_section:
+            st.error("Could not find mainboard section on Moxfield page.")
+            return []
+        card_elements = mainboard_section.select(".card-name")
+        cards = [card_elem.get_text(strip=True) for card_elem in card_elements]
+        return cards
     except Exception as e:
-        st.error(f"Failed to load deck {deck_id}: {e}")
+        st.error(f"Failed to load deck {deck_id} by scraping: {e}")
         return []
 
 # --- Matching logic ---
