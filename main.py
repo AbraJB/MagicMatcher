@@ -48,20 +48,15 @@ if collection_file:
     st.dataframe(res_df)
 
     st.header("Card Images")
+
+    cols = st.columns(4)  # Erzeugt 4 Spalten nebeneinander
+    i = 0
+
     for _, row in res_df.iterrows():
         if row["Image"] != "N/A":
-            st.image(row["Image"], width=150, caption=f"{row['Name']} ({row['Set']})")
+            with cols[i % 4]:
+                st.image(row["Image"], width=150, caption=f"{row['Name']} ({row['Set']})")
+            i += 1
+
 else:
     st.info("Please upload a CSV file with a 'Name' column.")
-
-st.header("Card Images")
-
-cols = st.columns(4)  # Erzeugt 4 Spalten nebeneinander
-i = 0
-
-for _, row in res_df.iterrows():
-    if row["Image"] != "N/A":
-        with cols[i % 4]:
-            st.image(row["Image"], width=150, caption=f"{row['Name']} ({row['Set']})")
-        i += 1
-
