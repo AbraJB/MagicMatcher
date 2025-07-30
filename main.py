@@ -4,7 +4,11 @@ import requests
 
 st.title("Magic Collection Checker with Scryfall")
 
-# Upload CSV
+# Beispiel, um die neue st.user zu verwenden (ohne Funktionalität, nur als Demo)
+current_user = st.user if hasattr(st, "user") else None
+if current_user:
+    st.write(f"Hello, {current_user}")
+
 collection_file = st.file_uploader("Upload your card collection CSV (with 'Name' column)", type=["csv"])
 if collection_file:
     df = pd.read_csv(collection_file)
@@ -46,4 +50,6 @@ if collection_file:
     st.header("Card Images")
     for _, row in res_df.iterrows():
         if row["Image"] != "N/A":
-            st
+            st.image(row["Image"], width=150, caption=f"{row['Name']} ({row['Set']})")
+else:
+    st.info("Please upload a CSV file with a 'Name' column.")
