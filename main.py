@@ -9,15 +9,18 @@ st.markdown("Compare your card collection with sample decks from Commander & Mod
 
 # --- Load or upload card collection ---
 st.sidebar.header("1. Upload your card collection")
-collection_file = st.sidebar.file_uploader("CSV with columns: Name,Quantity", type=["csv"])
+collection_file = st.sidebar.file_uploader("CSV with a column: Name", type=["csv"])
 
 if collection_file:
     collection_df = pd.read_csv(collection_file)
+    st.write("Uploaded collection preview:")
+    st.write(collection_df.head())
+    # Use only card names as a set (ignore quantities)
+    collection_set = set(collection_df['Name'].dropna().str.strip())
 else:
     st.sidebar.markdown("*No file uploaded. Using sample collection.*")
-    collection_df = pd.read_csv("sample_collection.csv")
-
-collection_dict = dict(zip(collection_df['Name'], collection_df['Quantity']))
+    sample_df = pd.read_csv("sample_collection.csv")
+    collection_set = set(sample_df['Name'].dropna().str.strip())
 
 # --- Load example decks ---
 st.sidebar.header("2. Choose deck format")
@@ -37,8 +40,8 @@ results = []
 
 for deck_name, cards in deck_data:
     total = len(cards)
-    owned = sum(1 for card in cards if collection_dict.get(card, 0) > 0)
-    missing = [card for card in cards if collection_dict.get(card, 0) == 0]
+    owned = sum(1 for card in cards if card in collection_set)
+    missing = [card for card in cards if card not in collection_set]
     percent = round((owned / total) * 100, 1)
     results.append({
         "Deck": deck_name,
