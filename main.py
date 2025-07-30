@@ -5,22 +5,22 @@ import os
 
 st.set_page_config(page_title="Magic Deck Matcher", layout="wide")
 st.title("🧙 Magic Deck Matcher")
-st.markdown("Vergleiche deine Kartensammlung mit Beispiel-Decks aus Commander & Modern.")
+st.markdown("Compare your card collection with sample decks from Commander & Modern.")
 
 # --- Load or upload card collection ---
-st.sidebar.header("1. Kartensammlung hochladen")
-collection_file = st.sidebar.file_uploader("CSV mit Spalten: Name,Anzahl", type=["csv"])
+st.sidebar.header("1. Upload your card collection")
+collection_file = st.sidebar.file_uploader("CSV with columns: Name,Quantity", type=["csv"])
 
 if collection_file:
     collection_df = pd.read_csv(collection_file)
 else:
-    st.sidebar.markdown("*Keine Datei hochgeladen. Beispiel-Sammlung wird verwendet.*")
+    st.sidebar.markdown("*No file uploaded. Using sample collection.*")
     collection_df = pd.read_csv("sample_collection.csv")
 
-collection_dict = dict(zip(collection_df['Name'], collection_df['Anzahl']))
+collection_dict = dict(zip(collection_df['Name'], collection_df['Quantity']))
 
 # --- Load example decks ---
-st.sidebar.header("2. Deckformat wählen")
+st.sidebar.header("2. Choose deck format")
 deck_format = st.sidebar.selectbox("Format", ["Commander", "Modern"])
 deck_folder = f"decks/{deck_format.lower()}"
 deck_files = [f for f in os.listdir(deck_folder) if f.endswith(".json")]
@@ -32,7 +32,7 @@ def load_deck(path):
 deck_data = [(f[:-5], load_deck(os.path.join(deck_folder, f))) for f in deck_files]
 
 # --- Matching logic ---
-st.header("🔍 Ergebnisse")
+st.header("🔍 Results")
 results = []
 
 for deck_name, cards in deck_data:
@@ -42,16 +42,16 @@ for deck_name, cards in deck_data:
     percent = round((owned / total) * 100, 1)
     results.append({
         "Deck": deck_name,
-        "Übereinstimmung": percent,
-        "Fehlende Karten": missing
+        "Match Percentage": percent,
+        "Missing Cards": missing
     })
 
-results = sorted(results, key=lambda x: -x["Übereinstimmung"])
+results = sorted(results, key=lambda x: -x["Match Percentage"])
 
 for res in results:
-    with st.expander(f"{res['Deck']} – {res['Übereinstimmung']}% passend"):
-        if res["Fehlende Karten"]:
-            st.write("**Fehlende Karten:**")
-            st.write(", ".join(res["Fehlende Karten"]))
+    with st.expander(f"{res['Deck']} – {res['Match Percentage']}% match"):
+        if res["Missing Cards"]:
+            st.write("**Missing Cards:**")
+            st.write(", ".join(res["Missing Cards"]))
         else:
-            st.success("✅ Du kannst dieses Deck vollständig bauen!")
+            st.success("✅ You can build this deck completely!")
