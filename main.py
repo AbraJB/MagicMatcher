@@ -64,3 +64,4 @@ for _, row in res_df.iterrows():
         with cols[i % 4]:
             st.image(row["Image"], width=150, caption=f"{row['Name']} ({row['Set']})")
         i += 1
+
