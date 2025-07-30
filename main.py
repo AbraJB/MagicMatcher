@@ -9,6 +9,7 @@ st.markdown("Compare your card collection with decks from [Moxfield](https://www
 # --- Load or upload card collection ---
 st.sidebar.header("1. Upload your card collection")
 collection_file = st.sidebar.file_uploader("CSV with a column: Name", type=["csv"])
+collection_set = set()
 
 if collection_file:
     collection_df = pd.read_csv(collection_file)
@@ -16,14 +17,15 @@ if collection_file:
     st.write(collection_df.head())
     collection_set = set(collection_df['Name'].dropna().str.strip())
 else:
-    st.sidebar.markdown("*No file uploaded. Using sample collection.*")
-    sample_cards = [
-        "Lightning Bolt", "Boros Charm", "Goblin Guide", "Serra Angel",
-        "Rift Bolt", "Skewer the Critics", "Lava Spike", "Monastery Swiftspear"
-    ]
-    collection_set = set(sample_cards)
-    st.write("Using sample collection:")
-    st.write(sample_cards)
+    use_sample = st.sidebar.checkbox("Use sample collection instead (if no file uploaded)")
+    if use_sample:
+        sample_cards = [
+            "Lightning Bolt", "Boros Charm", "Goblin Guide", "Serra Angel",
+            "Rift Bolt", "Skewer the Critics", "Lava Spike", "Monastery Swiftspear"
+        ]
+        collection_set = set(sample_cards)
+        st.write("Using sample collection:")
+        st.write(sample_cards)
 
 # --- Moxfield deck input ---
 st.sidebar.header("2. Enter Moxfield Deck URLs")
@@ -47,7 +49,7 @@ def load_moxfield_deck(deck_id):
 
 # --- Matching logic ---
 st.header("🔍 Match Results")
-if deck_urls_input.strip():
+if collection_set and deck_urls_input.strip():
     urls = [u.strip() for u in deck_urls_input.strip().splitlines()]
     for url in urls:
         deck_id = extract_deck_id(url)
@@ -72,5 +74,7 @@ if deck_urls_input.strip():
                 st.write(", ".join(missing))
             else:
                 st.success("✅ You can build this deck completely!")
-else:
+elif not collection_set:
+    st.info("Please upload your collection or use the sample collection.")
+elif not deck_urls_input.strip():
     st.info("Please enter at least one Moxfield deck URL to begin.")
