@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
-import json
-import os
+import requests
 
-st.set_page_config(page_title="Magic Deck Matcher", layout="wide")
+st.set_page_config(page_title="Magic Deck Matcher (Moxfield)", layout="wide")
 st.title("🧙 Magic Deck Matcher")
-st.markdown("Compare your card collection with sample decks from Commander & Modern.")
+st.markdown("Compare your card collection with decks from [Moxfield](https://www.moxfield.com).")
 
 # --- Load or upload card collection ---
 st.sidebar.header("1. Upload your card collection")
@@ -15,46 +14,63 @@ if collection_file:
     collection_df = pd.read_csv(collection_file)
     st.write("Uploaded collection preview:")
     st.write(collection_df.head())
-    # Use only card names as a set (ignore quantities)
     collection_set = set(collection_df['Name'].dropna().str.strip())
 else:
     st.sidebar.markdown("*No file uploaded. Using sample collection.*")
-    sample_df = pd.read_csv("sample_collection.csv")
-    collection_set = set(sample_df['Name'].dropna().str.strip())
+    sample_cards = [
+        "Lightning Bolt", "Boros Charm", "Goblin Guide", "Serra Angel",
+        "Rift Bolt", "Skewer the Critics", "Lava Spike", "Monastery Swiftspear"
+    ]
+    collection_set = set(sample_cards)
+    st.write("Using sample collection:")
+    st.write(sample_cards)
 
-# --- Load example decks ---
-st.sidebar.header("2. Choose deck format")
-deck_format = st.sidebar.selectbox("Format", ["Commander", "Modern"])
-deck_folder = f"decks/{deck_format.lower()}"
-deck_files = [f for f in os.listdir(deck_folder) if f.endswith(".json")]
+# --- Moxfield deck input ---
+st.sidebar.header("2. Enter Moxfield Deck URLs")
+deck_urls_input = st.sidebar.text_area("One URL per line", height=150)
 
-def load_deck(path):
-    with open(path, "r") as f:
-        return json.load(f)
+def extract_deck_id(url):
+    if "/decks/" in url:
+        return url.split("/decks/")[-1].split("/")[0]
+    return None
 
-deck_data = [(f[:-5], load_deck(os.path.join(deck_folder, f))) for f in deck_files]
+def load_moxfield_deck(deck_id):
+    api_url = f"https://api.moxfield.com/v2/decks/all/{deck_id}"
+    try:
+        response = requests.get(api_url)
+        response.raise_for_status()
+        data = response.json()
+        return list(data["mainboard"].keys())
+    except Exception as e:
+        st.error(f"Failed to load deck {deck_id}: {e}")
+        return []
 
 # --- Matching logic ---
-st.header("🔍 Results")
-results = []
+st.header("🔍 Match Results")
+if deck_urls_input.strip():
+    urls = [u.strip() for u in deck_urls_input.strip().splitlines()]
+    for url in urls:
+        deck_id = extract_deck_id(url)
+        if not deck_id:
+            st.error(f"❌ Invalid Moxfield URL: {url}")
+            continue
 
-for deck_name, cards in deck_data:
-    total = len(cards)
-    owned = sum(1 for card in cards if card in collection_set)
-    missing = [card for card in cards if card not in collection_set]
-    percent = round((owned / total) * 100, 1)
-    results.append({
-        "Deck": deck_name,
-        "Match Percentage": percent,
-        "Missing Cards": missing
-    })
+        card_list = load_moxfield_deck(deck_id)
+        if not card_list:
+            st.error(f"❌ Could not load deck from: {url}")
+            continue
 
-results = sorted(results, key=lambda x: -x["Match Percentage"])
+        total = len(card_list)
+        owned = sum(1 for card in card_list if card in collection_set)
+        missing = [card for card in card_list if card not in collection_set]
+        percent = round((owned / total) * 100, 1)
 
-for res in results:
-    with st.expander(f"{res['Deck']} – {res['Match Percentage']}% match"):
-        if res["Missing Cards"]:
-            st.write("**Missing Cards:**")
-            st.write(", ".join(res["Missing Cards"]))
-        else:
-            st.success("✅ You can build this deck completely!")
+        with st.expander(f"🔹 {deck_id} – {percent}% match"):
+            st.write(f"**Owned:** {owned} / {total} cards")
+            if missing:
+                st.warning("Missing Cards:")
+                st.write(", ".join(missing))
+            else:
+                st.success("✅ You can build this deck completely!")
+else:
+    st.info("Please enter at least one Moxfield deck URL to begin.")
