@@ -1,17 +1,16 @@
 import streamlit as st
 import pandas as pd
 import requests
+import re
 
-st.title("🧙‍♂️ Magic: The Gathering – Deck Checker mit Moxfield")
+st.title("🧙‍♂️ Magic: The Gathering – Moxfield Deck Checker")
 
-# Beispiel-Moxfield-Decks (Name → Deck-ID)
-moxfield_decks = {
-    "Yuriko Ninjas (EDH)": "WR0WxU44U0OgLAsyOKFw",
-    "Chulane Value (EDH)": "kBh9kF5DHEKwOlvVXkOY",
-    "Talion Faerie Combo": "N5gy9Sn4Z0mgc1DchYkg"
-}
+# Funktion: Extrahiere Moxfield-Deck-ID aus URL
+def extract_deck_id(url):
+    match = re.search(r"/decks/([\w\-]+)", url)
+    return match.group(1) if match else None
 
-# Funktion: Lade ein Deck von Moxfield über die API
+# Funktion: Lade ein Deck von Moxfield
 def load_moxfield_deck(deck_id):
     url = f"https://api.moxfield.com/v2/decks/{deck_id}"
     r = requests.get(url)
@@ -25,7 +24,7 @@ def load_moxfield_deck(deck_id):
         cards.extend([card_name] * quantity)
     return cards
 
-# Funktion: Vergleiche Sammlung mit Deck
+# Funktion: Vergleiche Deck mit Sammlung
 def compare_deck(deck_cards, collection_cards):
     collection_count = pd.Series(collection_cards).value_counts()
     deck_count = pd.Series(deck_cards).value_counts()
@@ -44,52 +43,46 @@ def compare_deck(deck_cards, collection_cards):
     coverage = round((have / total) * 100, 1)
     return coverage, missing
 
-# Datei-Upload
+# Benutzer lädt Sammlung hoch
 collection_file = st.file_uploader("📤 Lade deine Kartensammlung hoch (CSV mit Spalte 'Name')", type=["csv"])
 
-if collection_file:
+# Benutzer gibt Deck-URL ein
+deck_url = st.text_input("🔗 Gib die URL eines öffentlichen Moxfield-Decks ein:")
+
+if collection_file and deck_url:
     df = pd.read_csv(collection_file)
     if "Name" not in df.columns:
-        st.error("Fehlende Spalte 'Name' in der CSV.")
+        st.error("Die CSV-Datei benötigt eine Spalte 'Name'.")
     else:
         user_cards = df["Name"].dropna().str.strip().tolist()
         st.subheader("🃏 Deine Sammlung:")
         st.dataframe(df)
 
-        st.subheader("📚 Abgleich mit Moxfield-Decks")
+        # Deck-ID extrahieren
+        deck_id = extract_deck_id(deck_url)
+        if not deck_id:
+            st.error("❌ Konnte die Deck-ID aus der URL nicht extrahieren.")
+        else:
+            st.markdown("---")
+            st.subheader("📚 Deckprüfung")
 
-        full_decks = []
-        partial_decks = []
-
-        for deck_name, deck_id in moxfield_decks.items():
-            st.markdown(f"#### 🔍 Prüfe Deck: *{deck_name}*")
             deck_cards = load_moxfield_deck(deck_id)
             if not deck_cards:
-                st.warning(f"❌ Konnte Deck **{deck_name}** nicht laden.")
-                continue
-
-            coverage, missing_cards = compare_deck(deck_cards, user_cards)
-
-            if coverage == 100:
-                full_decks.append(deck_name)
-                st.success(f"✅ Du kannst das Deck **{deck_name}** vollständig bauen!")
-            elif coverage >= 75:
-                partial_decks.append(deck_name)
-                st.info(f"🟡 Du besitzt {coverage}% des Decks **{deck_name}**.")
-                st.write("Fehlende Karten:")
-                for card, count in missing_cards.items():
-                    st.write(f"- {card} x{count}")
+                st.error("❌ Konnte das Deck von Moxfield nicht laden. Stelle sicher, dass es öffentlich ist.")
             else:
-                st.write(f"🔴 Du besitzt nur {coverage}% des Decks **{deck_name}**.")
-                st.write("Fehlende Karten:")
-                for card, count in list(missing_cards.items())[:5]:  # Zeige max. 5 an
-                    st.write(f"- {card} x{count}")
-                st.caption("...mehr fehlen.")
+                coverage, missing_cards = compare_deck(deck_cards, user_cards)
 
-        st.markdown("---")
-        st.subheader("📈 Zusammenfassung:")
-        st.write(f"✅ Vollständige Decks baubar: {len(full_decks)}")
-        st.write(f"🟡 Teilweise baubare Decks (≥75%): {len(partial_decks)}")
+                if coverage == 100:
+                    st.success("✅ Du kannst dieses Deck **vollständig** bauen!")
+                elif coverage >= 75:
+                    st.info(f"🟡 Du kannst {coverage}% des Decks bauen.")
+                    st.write("Fehlende Karten:")
+                    for card, count in missing_cards.items():
+                        st.write(f"- {card} x{count}")
+                else:
+                    st.warning(f"🔴 Nur {coverage}% der Karten vorhanden – das reicht nicht.")
+                    st.write("Einige fehlende Karten:")
+                    for card, count in list(missing_cards.items())[:10]:
+                        st.write(f"- {card} x{count}")
 else:
-    st.info("Bitte lade eine CSV-Datei mit deiner Sammlung hoch. Beispiel:")
-    st.code("Name\nLightning Bolt\nIsland\nSnapcaster Mage", language="csv")
+    st.info("👉 Bitte lade deine Sammlung hoch **und** gib eine Moxfield-Deck-URL ein.")
