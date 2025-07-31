@@ -1,90 +1,55 @@
 import streamlit as st
 import pandas as pd
-from pyrchidekt.api import getDeckById
+import requests
 
-st.set_page_config(page_title="Archidekt Deck Checker", layout="wide")
-st.title("📚 Magic: The Gathering – Archidekt Deck Matcher")
+st.set_page_config(page_title="Magic Collection & Deck Matcher", layout="wide")
+st.title("🃏 Magic Collection & Deck Matcher mit MTGJSON")
 
-# Öffentliche Archidekt-Decks mit realen IDs (Beispiele)
-archidekt_decks = {
-    "Mono Green Stompy": 423111,
-    "Azorius Control": 428776,
-    "Rakdos Aggro": 427345,
-    "Izzet Spells": 430012,
-    "Selesnya Tokens": 421998,
-}
+# Upload der Kartensammlung
+collection_file = st.file_uploader("Upload your card collection CSV (mit 'Name' Spalte)", type=["csv"])
 
-def load_archidekt_deck(deck_id):
-    try:
-        deck = getDeckById(deck_id)
-    except Exception:
+DECKS_URL = "https://mtgjson.com/api/v5/AllDecks.json"
+
+@st.cache_data(ttl=3600)
+def get_decks():
+    r = requests.get(DECKS_URL)
+    if r.status_code != 200:
         return None
-    cards = []
-    for category in deck.categories:
-        for card in category.cards:
-            cards.extend([card.card.oracle_card.name] * card.quantity)
-    return cards
-
-def compare_deck(deck_cards, collection_cards):
-    collection_count = pd.Series(collection_cards).value_counts()
-    deck_count = pd.Series(deck_cards).value_counts()
-    missing = {}
-    have = 0
-    total = len(deck_cards)
-    for card in deck_count.index:
-        needed = deck_count[card]
-        owned = collection_count.get(card, 0)
-        have += min(needed, owned)
-        if owned < needed:
-            missing[card] = needed - owned
-    coverage = round((have / total) * 100, 1)
-    return coverage, missing
-
-collection_file = st.file_uploader("📁 Lade deine Kartensammlung (CSV mit Spalte 'Name')", type=["csv"])
+    data = r.json()
+    return data.get("data", {}).get("decks", [])
 
 if collection_file:
     df = pd.read_csv(collection_file)
     if "Name" not in df.columns:
-        st.error("Die CSV braucht eine Spalte namens `Name`.")
+        st.error("Die CSV-Datei braucht eine Spalte namens 'Name'.")
     else:
-        user_cards = df["Name"].dropna().str.strip().tolist()
-        st.subheader("🃏 Deine Sammlung")
-        st.dataframe(df, height=200)
+        user_cards = set(df['Name'].dropna().str.strip())
+        st.markdown("### Deine Sammlung")
+        st.dataframe(df, use_container_width=True)
 
         st.markdown("---")
-        st.subheader("🔍 Abgleich mit Archidekt-Decks")
+        st.markdown("## Decks aus MTGJSON (Top 5)")
 
-        full_matches = []
-        partial_matches = []
+        decks = get_decks()
+        if not decks:
+            st.error("Konnte Deckdaten nicht laden.")
+        else:
+            for deck in decks[:5]:
+                deck_name = deck.get("name", "Unbekannt")
+                cards = [c.get("name") for c in deck.get("cards", [])]
+                have = len(set(cards) & user_cards)
+                total = len(cards)
+                percent = round(have / total * 100, 1) if total else 0
 
-        for deck_name, deck_id in archidekt_decks.items():
-            with st.spinner(f"Prüfe Deck: {deck_name}"):
-                deck_cards = load_archidekt_deck(deck_id)
-                if not deck_cards:
-                    st.warning(f"Konnte Deck **{deck_name}** (ID {deck_id}) nicht laden.")
-                    continue
-                coverage, missing_cards = compare_deck(deck_cards, user_cards)
-                with st.expander(f"{deck_name} – {coverage}% Karten vorhanden"):
-                    if coverage == 100:
-                        st.success("✅ Vollständig baubar")
-                        full_matches.append(deck_name)
-                    elif coverage >= 75:
-                        st.info("🟡 Teilweise baubar")
-                        partial_matches.append(deck_name)
-                        st.write("Fehlende Karten:")
-                        for card, count in missing_cards.items():
-                            st.write(f"- {card} x{count}")
-                    else:
-                        st.warning("🔴 Unter 75 %")
-                        st.write("Einige fehlende Karten:")
-                        for c, cnt in list(missing_cards.items())[:10]:
-                            st.write(f"- {c} x{cnt}")
-
-        st.markdown("---")
-        st.subheader("📈 Übersicht")
-        st.success(f"✅ Vollständig: {len(full_matches)}")
-        st.info(f"🟡 Teilweise (≥75 %): {len(partial_matches)}")
-        st.warning(f"🔴 Nicht genug: {len(archidekt_decks) - len(full_matches) - len(partial_matches)}")
+                with st.expander(f"**{deck_name}** – {have}/{total} Karten vorhanden ({percent}%)"):
+                    st.write("### Karten im Deck:")
+                    cols = st.columns(4)
+                    for i, card in enumerate(cards):
+                        col = cols[i % 4]
+                        if card in user_cards:
+                            col.markdown(f"✅ **{card}**")
+                        else:
+                            col.markdown(f"❌ {card}")
 
 else:
-    st.info("Bitte lade zuerst deine Kartensammlung hoch.")
+    st.info("Bitte lade eine CSV-Datei mit einer 'Name' Spalte hoch, um deine Sammlung zu analysieren.")
